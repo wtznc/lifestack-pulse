@@ -163,6 +163,9 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# SonarQube
+sonar-project.properties
+
 # App bundles (build artifacts)
 *.app/
 
