@@ -13,19 +13,15 @@ def get_data_directory() -> Path:
     """
     Get the appropriate data directory for storing activity data.
 
-    Returns a user-specific directory that works regardless of how the app is launched.
-    On macOS, this will be ~/Library/Application Support/Pulse/
+    Delegates to ``config.data_dir`` for the resolved path (custom or
+    platform default) and ensures the directory exists.
     """
-    if sys.platform == "darwin":  # macOS
-        # Use macOS Application Support directory
-        app_support = Path.home() / "Library" / "Application Support" / "Pulse"
-    else:
-        # Fallback for other platforms
-        app_support = Path.home() / ".pulse"
+    from .config import get_config
 
-    # Ensure the directory exists
-    app_support.mkdir(parents=True, exist_ok=True)
-    return app_support
+    config = get_config()
+    data_dir = config.data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
 
 
 def view_activity_file(filepath):
