@@ -10,29 +10,74 @@ from unittest.mock import patch
 class TestGetDataDirectory(unittest.TestCase):
     """Test cases for get_data_directory function."""
 
+    def _make_config(self, data_dir=""):
+        """Create a mock config with the given data_dir."""
+        from unittest.mock import MagicMock
+
+        cfg = MagicMock()
+        cfg.get.return_value = data_dir
+        if data_dir:
+            cfg.data_dir = Path(data_dir)
+        else:
+            cfg.data_dir = (
+                Path.home() / "Library" / "Application Support" / "Pulse" / "data"
+            )
+        return cfg
+
     def test_returns_path_object(self):
         """Test that function returns a Path object."""
         from pulse.utils import get_data_directory
 
-        result = get_data_directory()
+        with patch("pulse.config.get_config", return_value=self._make_config()):
+            result = get_data_directory()
         self.assertIsInstance(result, Path)
 
-    @patch("sys.platform", "darwin")
-    def test_returns_macos_path_on_darwin(self):
-        """Test macOS-specific path on darwin platform."""
+    def test_returns_default_macos_path(self):
+        """Test default macOS path when no custom data_dir is configured."""
         from pulse.utils import get_data_directory
 
-        result = get_data_directory()
+        with patch("pulse.config.get_config", return_value=self._make_config()):
+            result = get_data_directory()
         self.assertIn("Library", str(result))
         self.assertIn("Application Support", str(result))
         self.assertIn("Pulse", str(result))
+
+    def test_returns_custom_path_from_config(self):
+        """Test that a custom data_dir from settings is respected."""
+        from pulse.utils import get_data_directory
+
+        custom = tempfile.mkdtemp()
+        try:
+            with patch(
+                "pulse.config.get_config",
+                return_value=self._make_config(custom),
+            ):
+                result = get_data_directory()
+            self.assertEqual(result, Path(custom))
+            self.assertTrue(result.exists())
+        finally:
+            import shutil
+
+            shutil.rmtree(custom)
 
     def test_directory_exists_after_call(self):
         """Test that directory is created if it doesn't exist."""
         from pulse.utils import get_data_directory
 
-        result = get_data_directory()
-        self.assertTrue(result.exists())
+        custom = tempfile.mkdtemp()
+        import shutil
+
+        shutil.rmtree(custom)  # Remove so get_data_directory re-creates it
+        try:
+            with patch(
+                "pulse.config.get_config",
+                return_value=self._make_config(custom),
+            ):
+                result = get_data_directory()
+            self.assertTrue(result.exists())
+        finally:
+            if Path(custom).exists():
+                shutil.rmtree(custom)
 
 
 class TestViewActivityFile(unittest.TestCase):

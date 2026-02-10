@@ -101,14 +101,17 @@ class SyncManager:
 
 def main():
     """Command line interface for sync manager."""
-    import os
     import sys
 
-    # Get configuration from environment variables
-    endpoint = os.getenv("PULSE_ENDPOINT", "")
-    auth_token = os.getenv("PULSE_AUTH_TOKEN", "")
+    from .config import get_config
+    from .utils import get_data_directory
 
-    sync_manager = SyncManager(endpoint=endpoint, auth_token=auth_token)
+    config = get_config()
+    sync_manager = SyncManager(
+        data_dir=str(get_data_directory()),
+        endpoint=config.get("sync_endpoint", ""),
+        auth_token=config.get("sync_auth_token", ""),
+    )
 
     if len(sys.argv) == 1 or "--help" in sys.argv:
         print("Sync Manager for Pulse")

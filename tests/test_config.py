@@ -146,6 +146,84 @@ class TestConfigFileHandling(unittest.TestCase):
         self.assertFalse(config.fast_mode)
 
 
+class TestDataDirProperty(unittest.TestCase):
+    """Test cases for the data_dir property."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        from pulse.config import Config
+
+        self.config = Config(config_dir=self.temp_dir)
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def test_default_data_dir_on_macos(self):
+        """Test that default data_dir points to Application Support on macOS."""
+        with patch("sys.platform", "darwin"):
+            result = self.config.data_dir
+        self.assertIn("Application Support", str(result))
+        self.assertIn("Pulse", str(result))
+        self.assertTrue(str(result).endswith("data"))
+
+    def test_custom_data_dir(self):
+        """Test that a custom data_dir is returned when set."""
+        self.config.data_dir = "/tmp/custom_pulse_data"
+        self.assertEqual(self.config.data_dir, Path("/tmp/custom_pulse_data"))
+
+    def test_empty_data_dir_uses_default(self):
+        """Test that empty string falls back to platform default."""
+        self.config.set("data_dir", "")
+        with patch("sys.platform", "darwin"):
+            result = self.config.data_dir
+        self.assertIn("Application Support", str(result))
+
+
+class TestConfigFirstLaunch(unittest.TestCase):
+    """Test cases for first-launch config file creation."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def test_creates_settings_file_on_first_launch(self):
+        """Test that settings.json is written on first launch."""
+        from pulse.config import Config
+
+        Config(config_dir=self.temp_dir)
+        settings_file = Path(self.temp_dir) / "settings.json"
+        self.assertTrue(settings_file.exists())
+        with open(settings_file) as f:
+            data = json.load(f)
+        self.assertIn("data_dir", data)
+        self.assertIn("idle_threshold", data)
+
+    def test_backfills_new_keys(self):
+        """Test that new default keys are written back to existing config."""
+        config_file = Path(self.temp_dir) / "settings.json"
+        # Write a config that is missing the data_dir key
+        with open(config_file, "w") as f:
+            json.dump({"idle_threshold": 600}, f)
+
+        from pulse.config import Config
+
+        config = Config(config_dir=self.temp_dir)
+        self.assertEqual(config.idle_threshold, 600)
+
+        # File should now contain all default keys
+        with open(config_file) as f:
+            data = json.load(f)
+        self.assertIn("data_dir", data)
+        self.assertIn("idle_threshold", data)
+        self.assertEqual(data["idle_threshold"], 600)
+
+
 class TestLoadConfigFromEnv(unittest.TestCase):
     """Test cases for loading config from environment variables."""
 

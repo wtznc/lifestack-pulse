@@ -13,6 +13,7 @@ DEFAULT_CONFIG = {
     "sync_endpoint": "",
     "sync_auth_token": "",  # nosec B105 - Bearer token for sync authentication
     "sync_interval": 3600,  # 1 hour
+    "data_dir": "",  # Custom data storage path (empty = default)
     "data_retention_days": 30,
     "auto_sync": False,
     "save_interval": 60,  # 1 minute
@@ -45,7 +46,11 @@ class Config:
         self._config = self._load_config()
 
     def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from file or create default."""
+        """Load configuration from file or create default.
+
+        On first launch, writes a settings.json with all default keys
+        so the user can discover and fill them in.
+        """
         if self.config_file.exists():
             try:
                 with open(self.config_file, "r", encoding="utf-8") as f:
@@ -53,20 +58,30 @@ class Config:
                 # Merge with defaults to ensure all keys exist
                 merged_config = DEFAULT_CONFIG.copy()
                 merged_config.update(config)
+                # Backfill any new default keys into the file
+                if set(merged_config.keys()) != set(config.keys()):
+                    self._write_config(merged_config)
                 return merged_config
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Warning: Could not load config file: {e}")
                 print("Using default configuration.")
 
-        return DEFAULT_CONFIG.copy()
+        # First launch: write defaults so the user can edit them
+        defaults = DEFAULT_CONFIG.copy()
+        self._write_config(defaults)
+        return defaults
+
+    def _write_config(self, config: Dict[str, Any]) -> None:
+        """Write configuration to file."""
+        try:
+            with open(self.config_file, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+        except IOError as e:
+            print(f"Warning: Could not write config file: {e}")
 
     def save(self) -> None:
         """Save current configuration to file."""
-        try:
-            with open(self.config_file, "w", encoding="utf-8") as f:
-                json.dump(self._config, f, indent=2, ensure_ascii=False)
-        except IOError as e:
-            print(f"Warning: Could not save config file: {e}")
+        self._write_config(self._config)
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value.
@@ -153,10 +168,19 @@ class Config:
     @property
     def data_dir(self) -> Path:
         """Get data directory path."""
-        data_dir = self.get("data_dir")
+        import sys
+
+        data_dir = self.get("data_dir", "")
         if data_dir:
             return Path(data_dir)
-        return Path.home() / "Library" / "Application Support" / "Pulse" / "data"
+        if sys.platform == "darwin":
+            return Path.home() / "Library" / "Application Support" / "Pulse" / "data"
+        return Path.home() / ".pulse"
+
+    @data_dir.setter
+    def data_dir(self, value: str) -> None:
+        """Set data directory path."""
+        self.set("data_dir", value)
 
 
 def load_config_from_env() -> Dict[str, Any]:

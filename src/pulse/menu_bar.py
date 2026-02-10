@@ -30,17 +30,20 @@ except ImportError:
     exit(1)
 
 try:
+    from pulse.config import get_config
     from pulse.core import Pulse
     from pulse.sync import SyncManager
     from pulse.utils import get_data_directory
 except ImportError:
     try:
+        from .config import get_config
         from .core import Pulse
         from .sync import SyncManager
         from .utils import get_data_directory
     except ImportError:
         # If running as script, add parent directory to path
         sys.path.insert(0, str(Path(__file__).parent))
+        from config import get_config  # type: ignore[import,no-redef]
         from core import Pulse  # type: ignore[import,no-redef]
         from sync import SyncManager  # type: ignore[import,no-redef]
         from utils import get_data_directory  # type: ignore[import,no-redef]
@@ -55,10 +58,15 @@ class PulseMenuBarDelegate(NSObject):
         self.tracker = None
         self.tracker_thread = None
         self.is_running = False
-        self.verbose_mode: bool = True
-        self.fast_mode: bool = False
-        self.idle_threshold: int = 300
-        self.sync_manager = SyncManager(data_dir=str(get_data_directory()))
+        config = get_config()
+        self.verbose_mode: bool = config.get("verbose_logging", True)
+        self.fast_mode: bool = config.get("fast_mode", False)
+        self.idle_threshold: int = config.get("idle_threshold", 300)
+        self.sync_manager = SyncManager(
+            data_dir=str(get_data_directory()),
+            endpoint=config.get("sync_endpoint", ""),
+            auth_token=config.get("sync_auth_token", ""),
+        )
 
         # Create status bar item
         self.status_bar = NSStatusBar.systemStatusBar()
@@ -265,60 +273,71 @@ class PulseMenuBarDelegate(NSObject):
     @objc.IBAction
     def syncData_(self, sender):
         """Sync activity data to remote endpoint."""
-        # Show starting alert
-        start_alert = NSAlert.alloc().init()
-        start_alert.setAlertStyle_(NSAlertStyleInformational)
-        start_alert.setMessageText_("Starting Sync")
-        start_alert.setInformativeText_(
-            "Syncing activity data to remote endpoint...\n\n"
-            "This may take a few moments."
-        )
-        start_alert.addButtonWithTitle_("OK")
-        start_alert.runModal()
+        if sender is not None:
+            sender.setEnabled_(False)
+            sender.setTitle_("Syncing...")
 
-        try:
-            # Run sync synchronously for simplicity
-            results = self.sync_manager.sync_all()
-
-            # Show completion alert
-            alert = NSAlert.alloc().init()
-            alert.setAlertStyle_(NSAlertStyleInformational)
-            alert.setMessageText_("Sync Completed")
-
-            if results["failed"] > 0:
-                alert_text = (
-                    f"[WARN] {results['failed']} hours failed to sync.\n"
-                    f"Check network connection.\n\n"
-                    f"Synced: {results['synced']}\nSkipped: {results['skipped']}"
+        def _run_sync():
+            try:
+                results = self.sync_manager.sync_all()
+                print(
+                    f"Sync completed: {results['synced']} synced, "
+                    f"{results['failed']} failed, {results['skipped']} skipped"
                 )
-            elif results["synced"] > 0:
-                alert_text = (
-                    f"[OK] Successfully synced {results['synced']} hours of data\n\n"
-                    f"Skipped: {results['skipped']} (already synced)"
+                self.performSelectorOnMainThread_withObject_waitUntilDone_(
+                    self._showSyncResult_, results, False
                 )
-            else:
-                alert_text = "[INFO] All data already synced\n\nNo new data to upload"
+            except Exception as e:
+                print(f"[FAIL] Sync error: {e}")
+                self.performSelectorOnMainThread_withObject_waitUntilDone_(
+                    self._showSyncError_, str(e), False
+                )
 
-            alert.setInformativeText_(alert_text)
-            alert.addButtonWithTitle_("OK")
-            alert.runModal()
+        threading.Thread(target=_run_sync, daemon=True).start()
 
-            # Also print to terminal for debugging
-            print(
-                f"Sync completed: {results['synced']} synced, "
-                f"{results['failed']} failed, {results['skipped']} skipped"
+    def _showSyncResult_(self, results):
+        """Show sync result alert on main thread."""
+        # Re-enable menu item
+        sync_item = self.menu.itemWithTitle_("Syncing...")
+        if sync_item:
+            sync_item.setTitle_("Sync Data")
+            sync_item.setEnabled_(True)
+
+        alert = NSAlert.alloc().init()
+        alert.setAlertStyle_(NSAlertStyleInformational)
+        alert.setMessageText_("Sync Completed")
+
+        if results["failed"] > 0:
+            alert_text = (
+                f"[WARN] {results['failed']} hours failed to sync.\n"
+                f"Check network connection.\n\n"
+                f"Synced: {results['synced']}\nSkipped: {results['skipped']}"
             )
+        elif results["synced"] > 0:
+            alert_text = (
+                f"[OK] Successfully synced {results['synced']} hours of data\n\n"
+                f"Skipped: {results['skipped']} (already synced)"
+            )
+        else:
+            alert_text = "[INFO] All data already synced\n\nNo new data to upload"
 
-        except Exception as e:
-            # Show error alert
-            error_alert = NSAlert.alloc().init()
-            error_alert.setAlertStyle_(NSAlertStyleInformational)
-            error_alert.setMessageText_("Sync Error")
-            error_alert.setInformativeText_(f"Error during sync: \n\n{str(e)}")
-            error_alert.addButtonWithTitle_("OK")
-            error_alert.runModal()
+        alert.setInformativeText_(alert_text)
+        alert.addButtonWithTitle_("OK")
+        alert.runModal()
 
-            print(f"[FAIL] Sync error: {e}")
+    def _showSyncError_(self, error_msg):
+        """Show sync error alert on main thread."""
+        sync_item = self.menu.itemWithTitle_("Syncing...")
+        if sync_item:
+            sync_item.setTitle_("Sync Data")
+            sync_item.setEnabled_(True)
+
+        error_alert = NSAlert.alloc().init()
+        error_alert.setAlertStyle_(NSAlertStyleInformational)
+        error_alert.setMessageText_("Sync Error")
+        error_alert.setInformativeText_(f"Error during sync: \n\n{error_msg}")
+        error_alert.addButtonWithTitle_("OK")
+        error_alert.runModal()
 
     @objc.IBAction
     def showSyncStatus_(self, sender):

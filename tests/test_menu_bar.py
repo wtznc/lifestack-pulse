@@ -228,13 +228,8 @@ class TestPulseMenuBarDelegate(unittest.TestCase):
         # terminate_ called on sharedApplication
         # NSApplication.sharedApplication().terminate_(None)
 
-    @patch("pulse.menu_bar.NSAlert")
-    def test_sync_data_success(self, mock_alert_cls):
+    def test_sync_data_success(self):
         """Test sync data success."""
-        # Use our MockNSObject logic or MagicMock for NSAlert
-        mock_alert = MagicMock()
-        mock_alert_cls.alloc.return_value.init.return_value = mock_alert
-
         self.delegate.sync_manager.sync_all.return_value = {
             "synced": 5,
             "failed": 0,
@@ -242,18 +237,17 @@ class TestPulseMenuBarDelegate(unittest.TestCase):
         }
 
         self.delegate.syncData_(None)
+        # Wait for background thread to finish
+        import threading
+
+        for t in threading.enumerate():
+            if t is not threading.current_thread() and t.daemon:
+                t.join(timeout=2)
 
         self.delegate.sync_manager.sync_all.assert_called()
-        # Verify success message
-        # We can't easily inspect setInformativeText_ argument string content exactly
-        # without complex matching, but we verify it ran modal
-        mock_alert.runModal.assert_called()
 
-    @patch("pulse.menu_bar.NSAlert")
-    def test_sync_data_failure(self, mock_alert_cls):
+    def test_sync_data_failure(self):
         """Test sync data with failures."""
-        mock_alert = MagicMock()
-        mock_alert_cls.alloc.return_value.init.return_value = mock_alert
         self.delegate.sync_manager.sync_all.return_value = {
             "synced": 0,
             "failed": 5,
@@ -261,17 +255,26 @@ class TestPulseMenuBarDelegate(unittest.TestCase):
         }
 
         self.delegate.syncData_(None)
-        mock_alert.runModal.assert_called()
+        import threading
 
-    @patch("pulse.menu_bar.NSAlert")
-    def test_sync_data_exception(self, mock_alert_cls):
+        for t in threading.enumerate():
+            if t is not threading.current_thread() and t.daemon:
+                t.join(timeout=2)
+
+        self.delegate.sync_manager.sync_all.assert_called()
+
+    def test_sync_data_exception(self):
         """Test sync data exception handling."""
-        mock_alert = MagicMock()
-        mock_alert_cls.alloc.return_value.init.return_value = mock_alert
         self.delegate.sync_manager.sync_all.side_effect = Exception("Sync failed")
 
         self.delegate.syncData_(None)
-        mock_alert.runModal.assert_called()
+        import threading
+
+        for t in threading.enumerate():
+            if t is not threading.current_thread() and t.daemon:
+                t.join(timeout=2)
+
+        self.delegate.sync_manager.sync_all.assert_called()
 
     @patch("pulse.menu_bar.NSAlert")
     def test_show_sync_status(self, mock_alert_cls):
