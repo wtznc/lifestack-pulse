@@ -64,9 +64,16 @@ class Config:
                 return merged_config
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Warning: Could not load config file: {e}")
+                # Preserve the corrupt file for debugging
+                bak = self.config_file.with_suffix(".json.bak")
+                try:
+                    self.config_file.rename(bak)
+                    print(f"Corrupt config backed up to {bak}")
+                except OSError:
+                    pass
                 print("Using default configuration.")
 
-        # First launch: write defaults so the user can edit them
+        # First launch (or recovery): write defaults so the user can edit them
         defaults = DEFAULT_CONFIG.copy()
         self._write_config(defaults)
         return defaults

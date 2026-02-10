@@ -62,8 +62,10 @@ class PulseMenuBarDelegate(NSObject):
         self.verbose_mode: bool = config.get("verbose_logging", True)
         self.fast_mode: bool = config.get("fast_mode", False)
         self.idle_threshold: int = config.get("idle_threshold", 300)
+        data_dir = config.data_dir
+        data_dir.mkdir(parents=True, exist_ok=True)
         self.sync_manager = SyncManager(
-            data_dir=str(get_data_directory()),
+            data_dir=str(data_dir),
             endpoint=config.get("sync_endpoint", ""),
             auth_token=config.get("sync_auth_token", ""),
         )
@@ -273,6 +275,7 @@ class PulseMenuBarDelegate(NSObject):
     @objc.IBAction
     def syncData_(self, sender):
         """Sync activity data to remote endpoint."""
+        self._sync_sender = sender
         if sender is not None:
             sender.setEnabled_(False)
             sender.setTitle_("Syncing...")
@@ -293,15 +296,19 @@ class PulseMenuBarDelegate(NSObject):
                     self._showSyncError_, str(e), False
                 )
 
-        threading.Thread(target=_run_sync, daemon=True).start()
+        self._sync_thread = threading.Thread(target=_run_sync, daemon=True)
+        self._sync_thread.start()
+
+    def _restoreSyncMenuItem(self):
+        """Re-enable the sync menu item after sync completes."""
+        sender = getattr(self, "_sync_sender", None)
+        if sender is not None:
+            sender.setTitle_("Sync Data")
+            sender.setEnabled_(True)
 
     def _showSyncResult_(self, results):
         """Show sync result alert on main thread."""
-        # Re-enable menu item
-        sync_item = self.menu.itemWithTitle_("Syncing...")
-        if sync_item:
-            sync_item.setTitle_("Sync Data")
-            sync_item.setEnabled_(True)
+        self._restoreSyncMenuItem()
 
         alert = NSAlert.alloc().init()
         alert.setAlertStyle_(NSAlertStyleInformational)
@@ -327,10 +334,7 @@ class PulseMenuBarDelegate(NSObject):
 
     def _showSyncError_(self, error_msg):
         """Show sync error alert on main thread."""
-        sync_item = self.menu.itemWithTitle_("Syncing...")
-        if sync_item:
-            sync_item.setTitle_("Sync Data")
-            sync_item.setEnabled_(True)
+        self._restoreSyncMenuItem()
 
         error_alert = NSAlert.alloc().init()
         error_alert.setAlertStyle_(NSAlertStyleInformational)

@@ -104,11 +104,12 @@ def main():
     import sys
 
     from .config import get_config
-    from .utils import get_data_directory
 
     config = get_config()
+    data_dir = config.data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
     sync_manager = SyncManager(
-        data_dir=str(get_data_directory()),
+        data_dir=str(data_dir),
         endpoint=config.get("sync_endpoint", ""),
         auth_token=config.get("sync_auth_token", ""),
     )
@@ -121,9 +122,10 @@ def main():
         print("  sync      Sync all pending data")
         print("  force     Force sync all data (including already synced)")
         print("  recent    Sync only last 24 hours")
-        print("\nEnvironment Variables:")
-        print("  PULSE_ENDPOINT      Sync endpoint URL (required for sync)")
-        print("  PULSE_AUTH_TOKEN    Bearer token for authentication")
+        print("\nConfiguration:")
+        print("  Settings are read from settings.json in the config directory.")
+        print("  Environment variables (PULSE_ENDPOINT, PULSE_AUTH_TOKEN)")
+        print("  override the corresponding settings.")
         return
 
     command = sys.argv[1]

@@ -10,6 +10,16 @@ from unittest.mock import patch
 class TestGetDataDirectory(unittest.TestCase):
     """Test cases for get_data_directory function."""
 
+    def setUp(self):
+        """Set up test fixtures."""
+        self._default_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test fixtures."""
+        import shutil
+
+        shutil.rmtree(self._default_dir, ignore_errors=True)
+
     def _make_config(self, data_dir=""):
         """Create a mock config with the given data_dir."""
         from unittest.mock import MagicMock
@@ -19,9 +29,7 @@ class TestGetDataDirectory(unittest.TestCase):
         if data_dir:
             cfg.data_dir = Path(data_dir)
         else:
-            cfg.data_dir = (
-                Path.home() / "Library" / "Application Support" / "Pulse" / "data"
-            )
+            cfg.data_dir = Path(self._default_dir)
         return cfg
 
     def test_returns_path_object(self):
@@ -32,15 +40,14 @@ class TestGetDataDirectory(unittest.TestCase):
             result = get_data_directory()
         self.assertIsInstance(result, Path)
 
-    def test_returns_default_macos_path(self):
-        """Test default macOS path when no custom data_dir is configured."""
+    def test_returns_default_path(self):
+        """Test that default path from config.data_dir is used."""
         from pulse.utils import get_data_directory
 
         with patch("pulse.config.get_config", return_value=self._make_config()):
             result = get_data_directory()
-        self.assertIn("Library", str(result))
-        self.assertIn("Application Support", str(result))
-        self.assertIn("Pulse", str(result))
+        self.assertEqual(result, Path(self._default_dir))
+        self.assertTrue(result.exists())
 
     def test_returns_custom_path_from_config(self):
         """Test that a custom data_dir from settings is respected."""

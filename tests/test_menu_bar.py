@@ -237,12 +237,7 @@ class TestPulseMenuBarDelegate(unittest.TestCase):
         }
 
         self.delegate.syncData_(None)
-        # Wait for background thread to finish
-        import threading
-
-        for t in threading.enumerate():
-            if t is not threading.current_thread() and t.daemon:
-                t.join(timeout=2)
+        self.delegate._sync_thread.join(timeout=2)
 
         self.delegate.sync_manager.sync_all.assert_called()
 
@@ -255,11 +250,7 @@ class TestPulseMenuBarDelegate(unittest.TestCase):
         }
 
         self.delegate.syncData_(None)
-        import threading
-
-        for t in threading.enumerate():
-            if t is not threading.current_thread() and t.daemon:
-                t.join(timeout=2)
+        self.delegate._sync_thread.join(timeout=2)
 
         self.delegate.sync_manager.sync_all.assert_called()
 
@@ -268,11 +259,7 @@ class TestPulseMenuBarDelegate(unittest.TestCase):
         self.delegate.sync_manager.sync_all.side_effect = Exception("Sync failed")
 
         self.delegate.syncData_(None)
-        import threading
-
-        for t in threading.enumerate():
-            if t is not threading.current_thread() and t.daemon:
-                t.join(timeout=2)
+        self.delegate._sync_thread.join(timeout=2)
 
         self.delegate.sync_manager.sync_all.assert_called()
 
