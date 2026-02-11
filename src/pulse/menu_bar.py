@@ -58,7 +58,8 @@ class PulseMenuBarDelegate(NSObject):
         self.tracker = None
         self.tracker_thread = None
         self.is_running = False
-        config = get_config()
+        self.config = get_config()
+        config = self.config
         self.verbose_mode: bool = config.get("verbose_logging", True)
         self.fast_mode: bool = config.get("fast_mode", False)
         self.idle_threshold: int = config.get("idle_threshold", 300)
@@ -117,6 +118,13 @@ class PulseMenuBarDelegate(NSObject):
         )
         data_item.setTarget_(self)
         self.menu.addItem_(data_item)
+
+        # Open Settings item
+        settings_item = NSMenuItem.alloc().initWithTitle_action_keyEquivalent_(
+            "Open Settings", "openSettings:", ""
+        )
+        settings_item.setTarget_(self)
+        self.menu.addItem_(settings_item)
 
         # Separator
         self.menu.addItem_(NSMenuItem.separatorItem())
@@ -377,6 +385,13 @@ Last sync: {status['last_sync'] if status['last_sync'] else 'Never'}"""
             error_alert.setInformativeText_(f"Error getting sync status: {e}")
             error_alert.addButtonWithTitle_("OK")
             error_alert.runModal()
+
+    @objc.IBAction
+    def openSettings_(self, sender):
+        """Open the settings file in the default editor."""
+        subprocess.run(
+            ["/usr/bin/open", str(self.config.config_file)], check=False
+        )  # nosec B603 - Safe macOS open command
 
     @objc.IBAction
     def openDataFolder_(self, sender):
